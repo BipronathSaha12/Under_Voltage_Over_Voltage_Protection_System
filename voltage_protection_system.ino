@@ -40,7 +40,7 @@ Algorithm
  */
 // code 
 #include <Filters.h> 
-#include <LiquidCrystal.h>
+#include <LiquidCrystal_I2C.h>
 
 // Define the pin numbers for the LCD
 const int rs = 3, en = 4, d4 = 5, d5 = 6, d6 = 7, d7 = 8;
