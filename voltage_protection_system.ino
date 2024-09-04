@@ -39,82 +39,84 @@ Algorithm
      - Turn on yellow LED
  */
 // code 
-#include <Filters.h> 
 #include <LiquidCrystal_I2C.h>
+#include <ZMPT101B.h>
 
-// Define the pin numbers for the LCD
-const int rs = 3, en = 4, d4 = 5, d5 = 6, d6 = 7, d7 = 8;
+#define SENSITIVITY 500.0f
 
-// Create an instance of the LiquidCrystal class with the specified pins
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+// ZMPT101B sensor output connected to analog pin A0
+// and the voltage source frequency is 50 Hz.
+ZMPT101B voltageSensor(A0, 50.0);
+// Pin configuration
+const int voltageSensorPin = A0;  // Voltage sensor input
+const int relayPin2 = 7;    // Relay module 2 control pin
+const int greenLEDPin = 9;  // Green LED pin
+const int redLEDPin = 10;   // Red LED pin
 
-float testFrequency = 50;  // Test frequency (not used in this code)
+// LCD pin configuration: (RS, EN, D4, D5, D6, D7)
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-int sensor = 0; // Variable to store the sensor reading
-int relay = 10; // Pin number for the relay control
-int yellow = 12; // Pin number for the yellow LED
-int green = 11; // Pin number for the green LED
-
-float intercept = 0.7; // Intercept value for voltage calculation
-float slope = 0.04; // Slope value for voltage calculation
-float current_Volts; // Variable to store the current voltage
-
-unsigned long printPeriod = 1000; // Time period for printing voltage (in milliseconds)
-unsigned long previousMillis = 0; // Stores the last time the voltage was printed
+// Thresholds for protection
+const float overVoltageThreshold = 235.0;   // Example threshold in volts
+const float underVoltageThreshold = 220.0;  // Example threshold in volts
 
 void setup() {
-    lcd.begin(16, 2); // Initialize the LCD with 16 columns and 2 rows
-    pinMode(relay, OUTPUT); // Set the relay pin as an output
-    pinMode(yellow, OUTPUT); // Set the yellow LED pin as an output
-    pinMode(green, OUTPUT); // Set the green LED pin as an output
-    lcd.print("Voltage:"); // Print "Voltage:" on the LCD
-    delay(1000); // Wait for 1 second
+  Serial.begin(9600);
+  pinMode(voltageSensorPin, INPUT);
+  pinMode(relayPin2, OUTPUT);
+  pinMode(greenLEDPin, OUTPUT);
+  pinMode(redLEDPin, OUTPUT);
+
+  //lcd.begin();  // Initialize the LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.print("Voltage: ");
+  voltageSensor.setSensitivity(SENSITIVITY);
 }
 
 void loop() {
-    RunningStatistics inputStats; // Create a RunningStatistics object to calculate statistics on the input
+  int voltageNow =map(voltageSensor.getRmsVoltage(), 28, 620, 0, 220);
+  //voltageNow=(voltageNow<0)? 0:voltageNow;
+  lcd.setCursor(0, 1);
+  lcd.print("          "); // Clear the previous voltage
+  lcd.setCursor(0, 1);
+  lcd.print(voltageNow);
+  lcd.print("V");
 
-    while (true) {
-        sensor = analogRead(A0); // Read the analog value from pin A0
-        inputStats.input(sensor); // Input the sensor value into the RunningStatistics object
+  // Check voltage conditions and control relay and LEDs
+  if (voltageNow > overVoltageThreshold) {
+    // Over voltage
+    digitalWrite(relayPin2, LOW);    // Turn off relay
+    digitalWrite(greenLEDPin, LOW);  // Turn off green LED
+    digitalWrite(redLEDPin, HIGH);   // Turn on red LED
 
-        if ((unsigned long)(millis() - previousMillis) >= printPeriod) { // Check if it's time to print the voltage
-            previousMillis = millis(); // Update the previousMillis variable to the current time
+    lcd.setCursor(9, 0);
+    lcd.print("      ");  // Clear previous status
+    lcd.setCursor(9, 0);
+    lcd.print("OVER");
 
-            // Calculate the current voltage using the intercept and slope
-            current_Volts = intercept + slope * inputStats.sigma(); 
-            current_Volts = current_Volts * (40.3231); // Convert to the actual voltage value
+  } else if (voltageNow < underVoltageThreshold) {
+    // Under voltage
+    digitalWrite(relayPin2, LOW);    // Turn off relay
+    digitalWrite(greenLEDPin, LOW);  // Turn off green LED
+    digitalWrite(redLEDPin, HIGH);   // Turn on red LED
 
-            lcd.setCursor(9, 0); // Set the cursor to the appropriate position on the LCD
-            lcd.print(current_Volts); // Print the current voltage on the LCD
-            lcd.print("V"); // Print the unit 'V' for voltage
-        }
+    lcd.setCursor(9, 0);
+    lcd.print("      ");  // Clear previous status
+    lcd.setCursor(9, 0);
+    lcd.print("UNDER");
 
-        // Check if the voltage is under the specified range
-        if ((current_Volts > 0) && (current_Volts < 190)) {
-            lcd.setCursor(0, 1); // Set the cursor to the second row on the LCD
-            lcd.print("Under Voltage"); // Print "Under Voltage" on the LCD
-            digitalWrite(relay, LOW); // Turn off the relay
-            digitalWrite(yellow, LOW); // Turn off the yellow LED
-            digitalWrite(green, HIGH); // Turn on the green LED
-        }
+  } else {
+    // Normal voltage
+    digitalWrite(relayPin2, HIGH);   // Turn on relay
+    digitalWrite(greenLEDPin, HIGH); // Turn on green LED
+    digitalWrite(redLEDPin, LOW);    // Turn off red LED
 
-        // Check if the voltage is within the normal range
-        if ((current_Volts >= 190) && (current_Volts <= 220)) {
-            lcd.setCursor(0, 1); // Set the cursor to the second row on the LCD
-            lcd.print("Normal Voltage"); // Print "Normal Voltage" on the LCD
-            digitalWrite(relay, HIGH); // Turn on the relay
-            digitalWrite(yellow, LOW); // Turn off the yellow LED
-            digitalWrite(green, LOW); // Turn off the green LED
-        }
+    lcd.setCursor(9, 0);
+    lcd.print("      ");  // Clear previous status
+    lcd.setCursor(9, 0);
+    lcd.print("NORMAL");
+  }
 
-        // Check if the voltage is over the specified range
-        if (current_Volts > 220) {
-            lcd.setCursor(0, 1); // Set the cursor to the second row on the LCD
-            lcd.print("Over Voltage"); // Print "Over Voltage" on the LCD
-            digitalWrite(relay, LOW); // Turn off the relay
-            digitalWrite(yellow, HIGH); // Turn on the yellow LED
-            digitalWrite(green, LOW); // Turn off the green LED
-        }
-    }
-} 
+  delay(500);
+}
