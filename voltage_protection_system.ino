@@ -57,8 +57,8 @@ const int redLEDPin = 10;   // Red LED pin
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // Thresholds for protection
-const float overVoltageThreshold = 235.0;   // Example threshold in volts
-const float underVoltageThreshold = 220.0;  // Example threshold in volts
+const float overVoltageThreshold = 235.0;   // threshold in over volts
+const float underVoltageThreshold = 220.0;  // threshold in under volts
 
 void setup() {
   Serial.begin(9600);
